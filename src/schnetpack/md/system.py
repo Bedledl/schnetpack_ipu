@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from schnetpack.md.utils import NormalModeTransformer
+import schnetpack.nn as snn
 from ase import Atoms
 
 from typing import Union, List, OrderedDict
@@ -227,7 +228,7 @@ class System(UninitializedMixin, nn.Module):
         x_tmp = torch.zeros(
             x_shape[0], self.n_molecules, *x_shape[2:], device=x.device, dtype=x.dtype
         )
-        return x_tmp.index_add(1, self.index_m, x)
+        return snn.index_add(x_tmp, 1, self.index_m, x)
 
     def _mean_atoms(self, x: torch.Tensor):
         """

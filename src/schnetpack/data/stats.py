@@ -4,6 +4,7 @@ import torch
 from tqdm import tqdm
 
 import schnetpack.properties as structure
+import schnetpack.nn as snn
 from schnetpack.data import AtomsLoader
 
 __all__ = ["calculate_stats"]
@@ -50,7 +51,7 @@ def calculate_stats(
                 ar = ar[props[structure.Z]]
                 idx_m = props[structure.idx_m]
                 tmp = torch.zeros((idx_m[-1] + 1,), dtype=ar.dtype, device=ar.device)
-                v0 = tmp.index_add(0, idx_m, ar)
+                v0 = snn.index_add(tmp, 0, idx_m, ar)
                 val -= v0
 
             sample_values.append(val)

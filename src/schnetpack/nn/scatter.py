@@ -9,26 +9,32 @@ def scatter_add(
 ) -> torch.Tensor:
     """
     Sum over values with the same indices.
-
     Args:
         x: input values
         idx_i: index of center atom i
         dim_size: size of the dimension after reduction
         dim: the dimension to reduce
-
     Returns:
         reduced input
-
     """
-    return _scatter_add(x, idx_i, dim_size, dim)
+    shape = list(x.shape)
+    shape[dim] = dim_size
+    tmp = torch.zeros(shape, dtype=x.dtype, device=x.device)
+
+    if (len(x.shape) == 3):
+        expanded_idx = idx_i.unsqueeze(1).repeat(1, shape[2]).unsqueeze(1).repeat(1, shape[1], 1)
+    elif (len(x.shape) == 2):
+        expanded_idx = idx_i.unsqueeze(1)
+    else:
+        raise NotImplementedError
+
+    result = tmp.scatter_add_(dim, expanded_idx, x)
+    return result
 
 
 @torch.jit.script
 def _scatter_add(
     x: torch.Tensor, idx_i: torch.Tensor, dim_size: int, dim: int = 0
 ) -> torch.Tensor:
-    shape = list(x.shape)
-    shape[dim] = dim_size
-    tmp = torch.zeros(shape, dtype=x.dtype, device=x.device)
-    y = tmp.index_add(dim, idx_i, x)
-    return y
+
+    pass
