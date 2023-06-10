@@ -28,5 +28,7 @@ def scatter_add(
     else:
         raise NotImplementedError
 
+    expanded_idx = expanded_idx.repeat(1, shape[1])
+
     result = tmp.scatter_add_(dim, expanded_idx, x)
     return result
