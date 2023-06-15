@@ -153,8 +153,13 @@ class NeighborListMD:
         # Move everything to correct device
         neighbor_idx = {p: neighbor_idx[p].to(positions.device) for p in neighbor_idx}
 
+        '''
+        The filter_indices method leads to dynamic sized neighbor lists
+        which is not allowed for runs on the IPU. 
+
         # filter out all pairs in the buffer zone
         neighbor_idx = self._filter_indices(positions, neighbor_idx)
+        '''
 
         return neighbor_idx
 
