@@ -20,7 +20,8 @@ __all__ = [
     "WrapPositions",
     "SkinNeighborList",
     "FilterNeighbors",
-    "KNNNeighborList"
+    "KNNNeighborList",
+    "CompleteNeighborList",
 ]
 
 import schnetpack as spk
@@ -606,6 +607,28 @@ class KNNNeighborList(TorchNeighborList):
 
         return idx_i, idx_j, offsets
 
+
+class CompleteNeighborList(NeighborListTransform):
+    """
+    This Neighborlist returns a complete graph as neighbor graph
+    """
+    def __init__(self, cutoff, n_atoms):
+        super(CompleteNeighborList, self).__init__(cutoff)
+        self.idx_i = torch.arange(n_atoms).repeat_interleave(n_atoms)
+        self.idx_j = torch.arange(n_atoms).repeat(n_atoms)
+        self.offsets = torch.tensor([[0, 0, 0]]).repeat(n_atoms * n_atoms, 1)
+
+
+    def _build_neighbor_list(
+        self,
+        Z: torch.Tensor,
+        positions: torch.Tensor,
+        cell: torch.Tensor,
+        pbc: torch.Tensor,
+        cutoff: float,
+    ):
+        # TODO shifts
+        return self.idx_i, self.idx_i, self.offsets
 
 
 class FilterNeighbors(Transform):
