@@ -154,7 +154,7 @@ class NeighborListMD:
         neighbor_idx = {p: neighbor_idx[p].to(positions.device) for p in neighbor_idx}
 
         # filter out all pairs in the buffer zone
-        neighbor_idx = self._filter_indices(positions, neighbor_idx)
+        #neighbor_idx = self._filter_indices(positions, neighbor_idx)
 
         return neighbor_idx
 
