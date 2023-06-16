@@ -33,6 +33,7 @@ Rij_lr: Final[
     str
 ] = "_Rij_lr"  #: vectors pointing from center atoms to neighboring atoms for long range
 n_atoms: Final[str] = "_n_atoms"  #: number of atoms
+n_molecules: Final[str] = "_n_molecules"  #: number of molecules
 offsets: Final[str] = "_offsets"  #: cell offset vectors
 offsets_lr: Final[str] = "_offsets_lr"  #: cell offset vectors for long range
 
