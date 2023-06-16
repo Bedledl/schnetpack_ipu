@@ -614,9 +614,7 @@ class CompleteNeighborList(NeighborListTransform):
     """
     def __init__(self, cutoff, n_atoms):
         super(CompleteNeighborList, self).__init__(cutoff)
-        self.idx_i = torch.arange(n_atoms).repeat_interleave(n_atoms)
-        self.idx_j = torch.arange(n_atoms).repeat(n_atoms)
-        self.offsets = torch.tensor([[0, 0, 0]]).repeat(n_atoms * n_atoms, 1)
+        raise NotImplementedError
 
 
     def _build_neighbor_list(
