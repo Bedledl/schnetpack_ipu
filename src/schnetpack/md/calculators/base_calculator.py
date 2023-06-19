@@ -189,6 +189,7 @@ class MDCalculator(nn.Module):
             properties.idx_m: index_m,
             properties.cell: cells,
             properties.pbc: pbc,
+            properties.n_molecules: system.n_molecules
         }
 
         return inputs
