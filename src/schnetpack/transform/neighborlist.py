@@ -522,14 +522,13 @@ class TorchNeighborList(NeighborListTransform):
         )
 
 
-
 class KNNNeighborList(TorchNeighborList):
     """
          Returns the k-nearest Neighbors
     """
     def __init__(self, k):
         super(KNNNeighborList, self).__init__(10.0)
-        self.k = k
+        self.k = int(k)
 
     def _build_neighbor_list(self, Z, positions, cell, pbc, cutoff):
         # Check if shifts are needed for periodic boundary conditions
