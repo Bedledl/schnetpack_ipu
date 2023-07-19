@@ -1,5 +1,5 @@
 import torch
-from torch_scatter import scatter_add
+from torch_scatter import scatter_add as torch_scatter_add
 
 __all__ = ["scatter_add"]
 
@@ -17,4 +17,5 @@ def scatter_add(
     Returns:
         reduced input
     """
-    return scatter_add(x, idx_i, dim_size=dim_size, dim=dim)
+    return torch_scatter_add(x, idx_i, dim, dim_size=dim_size)
+
