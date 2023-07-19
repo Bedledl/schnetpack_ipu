@@ -24,10 +24,13 @@ def _atoms_collate_fn(batch):
     idx_keys = {structure.idx_i, structure.idx_j, structure.idx_i_triples}
     # Atom triple indices must be treated separately
     idx_triple_keys = {structure.idx_j_triples, structure.idx_k_triples}
+    integer_keys = {structure.n_molecules}
 
     coll_batch = {}
     for key in elem:
-        if (key not in idx_keys) and (key not in idx_triple_keys):
+        if key in integer_keys:
+            coll_batch[key] = sum([d[key] for d in batch])
+        elif (key not in idx_keys) and (key not in idx_triple_keys):
             coll_batch[key] = torch.cat([d[key] for d in batch], 0)
         elif key in idx_keys:
             coll_batch[key + "_local"] = torch.cat([d[key] for d in batch], 0)
