@@ -489,7 +489,7 @@ class TorchNeighborList(NeighborListTransform):
                 symmetric cells are not included.
         """
         reciprocal_cell = cell.inverse().t()
-        inverse_lengths = torch.norm(reciprocal_cell, dim=1)
+        inverse_lengths = reciprocal_cell.pow(2).sum(-1).sqrt()
 
         num_repeats = torch.ceil(cutoff * inverse_lengths).long()
         num_repeats = torch.where(
