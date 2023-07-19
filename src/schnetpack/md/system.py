@@ -15,7 +15,7 @@ from schnetpack import units as spk_units
 from schnetpack.md.utils import UninitializedMixin
 from schnetpack.nn import index_add
 
-__all__ = ["System"]
+__all__ = ["SystemBase", "System"]
 
 
 class SystemException(Exception):
@@ -26,84 +26,15 @@ class SystemWarning(Warning):
     pass
 
 
-class System(UninitializedMixin, nn.Module):
-    """
-    Container for all properties associated with the simulated molecular system
-    (masses, positions, momenta, ...). Uses MD unit system defined in `schnetpack.units` internally.
-
-    In order to simulate multiple systems efficiently dynamics properties
-    (positions, momenta, forces) are torch tensors with the following
-    dimensions:
-        n_replicas x (n_molecules * n_atoms) x 3
-
-    Here n_replicas is the number of copies for every molecule. In a normal
-    simulation, these are treated as independent molecules e.g. for sampling
-    purposes. In the case of ring polymer molecular dynamics (using the
-    RingPolymer integrator), these replicas correspond to the beads of the
-    polymer. n_molecules is the number of different molecules constituting
-    the system, these can e.g. be different initial configurations of the
-    same system (once again for sampling) or completely different molecules.
-    Atoms of multiple molecules are concatenated.
-
-    Static properties are stored in tensors of the shape:
-        n_atoms : n_molecules (the same for all replicas)
-        masses : 1 x (n_molecules * n_atoms) x 1 (the same for all replicas)
-        atom_types : (n_molecules * n_atoms)
-        index_m : (n_molecules * n_atoms)
-
-    `n_atoms` contains the number of atoms present in every molecule, `masses`
-    and `atom_types` contain the molcular masses and nuclear charges.
-    `index_m` is an index for mapping atoms to individual molecules.
-
-    Finally a dictionary properties stores the results of every calculator
-    call for easy access of e.g. energies and dipole moments.
-
-    Args:
-        device (str, torch.device): Computation device (default='cuda').
-        precision (int, torch.dtype): Precision used for floating point numbers (default=32).
-    """
-
-    # Property dictionary, updated during simulation
-    properties = {}
-
-    def __init__(
-        self, normal_mode_transform: NormalModeTransformer = NormalModeTransformer
+class SystemBase(nn.Module):
+    def load_molecules(
+            self,
+            molecules,
+            n_replicas: int = 1,
+            position_unit_input: Union[str, float] = "Angstrom",
+            mass_unit_input: Union[str, float] = 1.0,
     ):
-        super(System, self).__init__()
-
-        self._nm_transformer = normal_mode_transform
-        # For initialized nm transform
-        self.nm_transform = None
-
-        # Index for aggregation
-        self.register_uninitialized_buffer("index_m", dtype=torch.long)
-
-        # number of molecules, replicas of each and vector with the number of
-        # atoms in each molecule
-        self.n_replicas = None
-        self.n_molecules = None
-        self.total_n_atoms = None
-
-        # General static molecular properties
-        self.register_uninitialized_buffer("n_atoms", dtype=torch.long)
-        self.register_uninitialized_buffer("atom_types", dtype=torch.long)
-        self.register_uninitialized_buffer("masses")
-
-        # Dynamic properties updated during simulation
-        self.register_uninitialized_buffer("positions")
-        self.register_uninitialized_buffer("momenta")
-        self.register_uninitialized_buffer("forces")
-        self.register_uninitialized_buffer("energy")
-
-        # Properties for periodic boundary conditions and crystal cells
-        self.register_uninitialized_buffer("cells")
-        self.register_uninitialized_buffer("pbc")
-        self.register_uninitialized_buffer(
-            "stress"
-        )  # Used for the computation of the pressure
-
-        # Dummy tensor for device and dtype
-        self.register_buffer("_dd_dummy", torch.zeros(1))
+        raise NotImplementedError
 
     @property
     def device(self):
@@ -112,107 +43,6 @@ class System(UninitializedMixin, nn.Module):
     @property
     def dtype(self):
         return self._dd_dummy.dtype
-
-    def load_molecules(
-        self,
-        molecules: Union[Atoms, List[Atoms]],
-        n_replicas: int = 1,
-        position_unit_input: Union[str, float] = "Angstrom",
-        mass_unit_input: Union[str, float] = 1.0,
-    ):
-        """
-        Initializes all required variables and tensors based on a list of ASE
-        atoms objects.
-
-        Args:
-            molecules (ase.Atoms, list(ase.Atoms)): List of ASE atoms objects containing
-                molecular structures and chemical elements.
-            n_replicas (int): Number of replicas (e.g. for RPMD)
-            position_unit_input (str, float): Position units of the input structures (default="Angstrom")
-            mass_unit_input (str, float): Units of masses passed in the ASE atoms. Assumed to be Dalton.
-        """
-        self.n_replicas = n_replicas
-
-        # TODO: make cells/PBC False if not set?
-
-        # Set up unit conversion
-        positions2internal = spk_units.unit2internal(position_unit_input)
-        mass2internal = spk_units.unit2internal(mass_unit_input)
-
-        # 0) Check if molecules is a single ase.Atoms object and wrap it in list.
-        if isinstance(molecules, Atoms):
-            molecules = [molecules]
-
-        # 1) Get number of molecules, number of replicas and number of
-        #    overall systems
-        self.n_molecules = len(molecules)
-
-        # 2) Construct array with number of atoms in each molecule
-        self.n_atoms = torch.zeros(self.n_molecules, dtype=torch.long)
-
-        for i in range(self.n_molecules):
-            self.n_atoms[i] = molecules[i].get_global_number_of_atoms()
-
-        # 3) Get total n_molecule x n_atom dimension
-        self.total_n_atoms = torch.sum(self.n_atoms).item()
-        # initialize index vector for aggregation
-        self.index_m = torch.zeros(self.total_n_atoms, dtype=torch.long)
-
-        # 3) Construct basic property arrays
-        self.atom_types = torch.zeros(self.total_n_atoms, dtype=torch.long)
-        self.masses = torch.ones(1, self.total_n_atoms, 1)
-
-        # Relevant for dynamic properties: positions, momenta, forces
-        self.positions = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
-        self.momenta = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
-        self.forces = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
-
-        self.energy = torch.zeros(self.n_replicas, self.n_molecules, 1)
-
-        # Relevant for periodic boundary conditions and simulation cells
-        self.cells = torch.zeros(self.n_replicas, self.n_molecules, 3, 3)
-        self.stress = torch.zeros(self.n_replicas, self.n_molecules, 3, 3)
-        self.pbc = torch.zeros(1, self.n_molecules, 3)
-
-        # 5) Populate arrays according to the data provided in molecules
-        idx_c = 0
-        for i in range(self.n_molecules):
-            n_atoms = self.n_atoms[i]
-
-            # Aggregation array
-            self.index_m[idx_c : idx_c + n_atoms] = i
-
-            # Static properties
-            self.atom_types[idx_c : idx_c + n_atoms] = torch.from_numpy(
-                molecules[i].get_atomic_numbers()
-            ).long()
-            self.masses[0, idx_c : idx_c + n_atoms, 0] = torch.from_numpy(
-                molecules[i].get_masses() * mass2internal
-            )
-
-            # Dynamic properties
-            self.positions[:, idx_c : idx_c + n_atoms, :] = torch.from_numpy(
-                molecules[i].positions * positions2internal
-            )
-
-            # Properties for cell simulations
-            self.cells[:, i, :, :] = torch.from_numpy(
-                molecules[i].cell.array * positions2internal
-            )
-            self.pbc[0, i, :] = torch.from_numpy(molecules[i].pbc)
-
-            idx_c += n_atoms
-
-        # Convert periodic boundary conditions to Boolean tensor
-        self.pbc = self.pbc.bool()
-
-        # Check for cell/pbc stuff:
-        if torch.sum(torch.abs(self.cells)) == 0.0:
-            if torch.sum(self.pbc) > 0.0:
-                raise SystemException("Found periodic boundary conditions but no cell.")
-
-        # Set normal mode transformer
-        self.nm_transform = self._nm_transformer(n_replicas)
 
     def sum_atoms(self, x: torch.Tensor):
         """
@@ -228,8 +58,7 @@ class System(UninitializedMixin, nn.Module):
         x_tmp = torch.zeros(
             x_shape[0], self.n_molecules, *x_shape[2:], device=x.device, dtype=x.dtype
         )
-
-        return index_add(x_tmp, 1, self.index_m, x)
+        return x_tmp.index_add(1, self.index_m, x)
 
     def _mean_atoms(self, x: torch.Tensor):
         """
@@ -315,51 +144,6 @@ class System(UninitializedMixin, nn.Module):
         # Subtract rotation from overall motion (apply atom mask)
         self.momenta -= rotational_velocities * self.masses
 
-    def get_ase_atoms(self, position_unit_output="Angstrom"):
-        # TODO: make sensible unit conversion and update docs
-        """
-        Convert the stored molecular configurations into ASE Atoms objects. This is e.g. used for the
-        neighbor lists based on environment providers. All units are atomic units by default, as used in the calculator
-
-        Args:
-            position_unit_output (str, float): Target units for position output.
-
-        Returns:
-            list(ase.Atoms): List of ASE Atoms objects, with the replica and molecule dimension flattened.
-        """
-        internal2positions = spk_units.convert_units(
-            spk_units.length, position_unit_output
-        )
-
-        atoms = []
-        for idx_r in range(self.n_replicas):
-            idx_c = 0
-            for idx_m in range(self.n_molecules):
-                n_atoms = self.n_atoms[idx_m]
-
-                positions = (
-                    self.positions[idx_r, idx_c : idx_c + n_atoms]
-                    .cpu()
-                    .detach()
-                    .numpy()
-                ) * internal2positions
-
-                atom_types = (
-                    self.atom_types[idx_c : idx_c + n_atoms].cpu().detach().numpy()
-                )
-
-                cell = (
-                    self.cells[idx_r, idx_m].cpu().detach().numpy() * internal2positions
-                )
-                pbc = self.pbc[0, idx_m].cpu().detach().numpy()
-
-                mol = Atoms(atom_types, positions, cell=cell, pbc=pbc)
-                atoms.append(mol)
-
-                idx_c += n_atoms
-
-        return atoms
-
     @property
     def velocities(self):
         """
@@ -382,7 +166,7 @@ class System(UninitializedMixin, nn.Module):
                           the shape n_replicas x n_molecules x 1
         """
         kinetic_energy = 0.5 * self.sum_atoms(
-            torch.sum(self.momenta**2, dim=2, keepdim=True) / self.masses
+            torch.sum(self.momenta ** 2, dim=2, keepdim=True) / self.masses
         )
         return kinetic_energy
 
@@ -415,9 +199,9 @@ class System(UninitializedMixin, nn.Module):
                           Kelvin) with the shape n_replicas x n_molecules x 1
         """
         temperature = (
-            2.0
-            / (3.0 * self.n_atoms[None, :, None] * spk_units.kB)
-            * self.kinetic_energy
+                2.0
+                / (3.0 * self.n_atoms[None, :, None] * spk_units.kB)
+                * self.kinetic_energy
         )
         return temperature
 
@@ -533,7 +317,7 @@ class System(UninitializedMixin, nn.Module):
                           Hartree) with the shape 1 x n_molecules x 1
         """
         kinetic_energy = 0.5 * self.sum_atoms(
-            torch.sum(self.centroid_momenta**2, dim=2, keepdim=True) / self.masses
+            torch.sum(self.centroid_momenta ** 2, dim=2, keepdim=True) / self.masses
         )
         return kinetic_energy
 
@@ -549,9 +333,9 @@ class System(UninitializedMixin, nn.Module):
                           in Kelvin) with the shape 1 x n_molecules x 1
         """
         temperature = (
-            2.0
-            / (3.0 * spk_units.kB * self.n_atoms[None, :, None])
-            * self.centroid_kinetic_energy
+                2.0
+                / (3.0 * spk_units.kB * self.n_atoms[None, :, None])
+                * self.centroid_kinetic_energy
         )
         return temperature
 
@@ -649,6 +433,232 @@ class System(UninitializedMixin, nn.Module):
                 pressure += 2.0 * self.centroid_kinetic_energy / volume / 3.0
 
         return pressure
+
+
+class System(UninitializedMixin, SystemBase):
+    """
+    Container for all properties associated with the simulated molecular system
+    (masses, positions, momenta, ...). Uses MD unit system defined in `schnetpack.units` internally.
+
+    In order to simulate multiple systems efficiently dynamics properties
+    (positions, momenta, forces) are torch tensors with the following
+    dimensions:
+        n_replicas x (n_molecules * n_atoms) x 3
+
+    Here n_replicas is the number of copies for every molecule. In a normal
+    simulation, these are treated as independent molecules e.g. for sampling
+    purposes. In the case of ring polymer molecular dynamics (using the
+    RingPolymer integrator), these replicas correspond to the beads of the
+    polymer. n_molecules is the number of different molecules constituting
+    the system, these can e.g. be different initial configurations of the
+    same system (once again for sampling) or completely different molecules.
+    Atoms of multiple molecules are concatenated.
+
+    Static properties are stored in tensors of the shape:
+        n_atoms : n_molecules (the same for all replicas)
+        masses : 1 x (n_molecules * n_atoms) x 1 (the same for all replicas)
+        atom_types : (n_molecules * n_atoms)
+        index_m : (n_molecules * n_atoms)
+
+    `n_atoms` contains the number of atoms present in every molecule, `masses`
+    and `atom_types` contain the molcular masses and nuclear charges.
+    `index_m` is an index for mapping atoms to individual molecules.
+
+    Finally a dictionary properties stores the results of every calculator
+    call for easy access of e.g. energies and dipole moments.
+
+    Args:
+        device (str, torch.device): Computation device (default='cuda').
+        precision (int, torch.dtype): Precision used for floating point numbers (default=32).
+    """
+
+    # Property dictionary, updated during simulation
+    properties = {}
+
+    def __init__(
+        self, normal_mode_transform: NormalModeTransformer = NormalModeTransformer
+    ):
+        super(System, self).__init__()
+
+        self._nm_transformer = normal_mode_transform
+        # For initialized nm transform
+        self.nm_transform = None
+
+        # Index for aggregation
+        self.register_uninitialized_buffer("index_m", dtype=torch.long)
+
+        # number of molecules, replicas of each and vector with the number of
+        # atoms in each molecule
+        self.n_replicas = None
+        self.n_molecules = None
+        self.total_n_atoms = None
+
+        # General static molecular properties
+        self.register_uninitialized_buffer("n_atoms", dtype=torch.long)
+        self.register_uninitialized_buffer("atom_types", dtype=torch.long)
+        self.register_uninitialized_buffer("masses")
+
+        # Dynamic properties updated during simulation
+        self.register_uninitialized_buffer("positions")
+        self.register_uninitialized_buffer("momenta")
+        self.register_uninitialized_buffer("forces")
+        self.register_uninitialized_buffer("energy")
+
+        # Properties for periodic boundary conditions and crystal cells
+        self.register_uninitialized_buffer("cells")
+        self.register_uninitialized_buffer("pbc")
+        self.register_uninitialized_buffer(
+            "stress"
+        )  # Used for the computation of the pressure
+
+        # Dummy tensor for device and dtype
+        self.register_buffer("_dd_dummy", torch.zeros(1))
+
+    def load_molecules(
+        self,
+        molecules: Union[Atoms, List[Atoms]],
+        n_replicas: int = 1,
+        position_unit_input: Union[str, float] = "Angstrom",
+        mass_unit_input: Union[str, float] = 1.0,
+    ):
+        """
+        Initializes all required variables and tensors based on a list of ASE
+        atoms objects.
+
+        Args:
+            molecules (ase.Atoms, list(ase.Atoms)): List of ASE atoms objects containing
+                molecular structures and chemical elements.
+            n_replicas (int): Number of replicas (e.g. for RPMD)
+            position_unit_input (str, float): Position units of the input structures (default="Angstrom")
+            mass_unit_input (str, float): Units of masses passed in the ASE atoms. Assumed to be Dalton.
+        """
+        self.n_replicas = n_replicas
+
+        # TODO: make cells/PBC False if not set?
+
+        # Set up unit conversion
+        positions2internal = spk_units.unit2internal(position_unit_input)
+        mass2internal = spk_units.unit2internal(mass_unit_input)
+
+        # 0) Check if molecules is a single ase.Atoms object and wrap it in list.
+        if isinstance(molecules, Atoms):
+            molecules = [molecules]
+
+        # 1) Get number of molecules, number of replicas and number of
+        #    overall systems
+        self.n_molecules = len(molecules)
+
+        # 2) Construct array with number of atoms in each molecule
+        self.n_atoms = torch.zeros(self.n_molecules, dtype=torch.long)
+
+        for i in range(self.n_molecules):
+            self.n_atoms[i] = molecules[i].get_global_number_of_atoms()
+
+        # 3) Get total n_molecule x n_atom dimension
+        self.total_n_atoms = torch.sum(self.n_atoms).item()
+        # initialize index vector for aggregation
+        self.index_m = torch.zeros(self.total_n_atoms, dtype=torch.long)
+
+        # 3) Construct basic property arrays
+        self.atom_types = torch.zeros(self.total_n_atoms, dtype=torch.long)
+        self.masses = torch.ones(1, self.total_n_atoms, 1)
+
+        # Relevant for dynamic properties: positions, momenta, forces
+        self.positions = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
+        self.momenta = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
+        self.forces = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
+
+        self.energy = torch.zeros(self.n_replicas, self.n_molecules, 1)
+
+        # Relevant for periodic boundary conditions and simulation cells
+        self.cells = torch.zeros(self.n_replicas, self.n_molecules, 3, 3)
+        self.stress = torch.zeros(self.n_replicas, self.n_molecules, 3, 3)
+        self.pbc = torch.zeros(1, self.n_molecules, 3)
+
+        # 5) Populate arrays according to the data provided in molecules
+        idx_c = 0
+        for i in range(self.n_molecules):
+            n_atoms = self.n_atoms[i]
+
+            # Aggregation array
+            self.index_m[idx_c : idx_c + n_atoms] = i
+
+            # Static properties
+            self.atom_types[idx_c : idx_c + n_atoms] = torch.from_numpy(
+                molecules[i].get_atomic_numbers()
+            ).long()
+            self.masses[0, idx_c : idx_c + n_atoms, 0] = torch.from_numpy(
+                molecules[i].get_masses() * mass2internal
+            )
+
+            # Dynamic properties
+            self.positions[:, idx_c : idx_c + n_atoms, :] = torch.from_numpy(
+                molecules[i].positions * positions2internal
+            )
+
+            # Properties for cell simulations
+            self.cells[:, i, :, :] = torch.from_numpy(
+                molecules[i].cell.array * positions2internal
+            )
+            self.pbc[0, i, :] = torch.from_numpy(molecules[i].pbc)
+
+            idx_c += n_atoms
+
+        # Convert periodic boundary conditions to Boolean tensor
+        self.pbc = self.pbc.bool()
+
+        # Check for cell/pbc stuff:
+        if torch.sum(torch.abs(self.cells)) == 0.0:
+            if torch.sum(self.pbc) > 0.0:
+                raise SystemException("Found periodic boundary conditions but no cell.")
+
+        # Set normal mode transformer
+        self.nm_transform = self._nm_transformer(n_replicas)
+
+    def get_ase_atoms(self, position_unit_output="Angstrom"):
+        # TODO: make sensible unit conversion and update docs
+        """
+        Convert the stored molecular configurations into ASE Atoms objects. This is e.g. used for the
+        neighbor lists based on environment providers. All units are atomic units by default, as used in the calculator
+
+        Args:
+            position_unit_output (str, float): Target units for position output.
+
+        Returns:
+            list(ase.Atoms): List of ASE Atoms objects, with the replica and molecule dimension flattened.
+        """
+        internal2positions = spk_units.convert_units(
+            spk_units.length, position_unit_output
+        )
+
+        atoms = []
+        for idx_r in range(self.n_replicas):
+            idx_c = 0
+            for idx_m in range(self.n_molecules):
+                n_atoms = self.n_atoms[idx_m]
+
+                positions = (
+                    self.positions[idx_r, idx_c : idx_c + n_atoms]
+                    .cpu()
+                    .detach()
+                    .numpy()
+                ) * internal2positions
+
+                atom_types = (
+                    self.atom_types[idx_c : idx_c + n_atoms].cpu().detach().numpy()
+                )
+
+                cell = (
+                    self.cells[idx_r, idx_m].cpu().detach().numpy() * internal2positions
+                )
+                pbc = self.pbc[0, idx_m].cpu().detach().numpy()
+
+                mol = Atoms(atom_types, positions, cell=cell, pbc=pbc)
+                atoms.append(mol)
+
+                idx_c += n_atoms
+
+        return atoms
 
     def wrap_positions(self, eps=1e-6):
         """

@@ -4,8 +4,9 @@ import torch
 from torch import nn
 
 import schnetpack.properties as structure
-from schnetpack.nn import Dense, scatter_add
+from schnetpack.nn import Dense
 from schnetpack.nn.activations import shifted_softplus
+from torch_scatter import scatter_add
 
 import schnetpack.nn as snn
 
@@ -65,7 +66,7 @@ class SchNetInteraction(nn.Module):
         # continuous-filter convolution
         x_j = x[idx_j]
         x_ij = x_j * Wij
-        x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+        x = scatter_add(x_ij, idx_i, dim_size=x.shape[0], dim=0)
 
         x = self.f2out(x)
         return x
@@ -143,7 +144,7 @@ class SchNet(nn.Module):
 
         # compute atom and pair features
         x = self.embedding(atomic_numbers)
-        d_ij = torch.norm(r_ij, dim=1)
+        d_ij = torch.linalg.norm(r_ij, dim=1)
         f_ij = self.radial_basis(d_ij)
         rcut_ij = self.cutoff_fn(d_ij)
 

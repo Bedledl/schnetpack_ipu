@@ -5,7 +5,7 @@ from ase.data import atomic_masses
 
 import schnetpack.properties as structure
 from .base import Transform
-from schnetpack.nn import scatter_add
+from torch_scatter import scatter_add
 
 __all__ = [
     "SubtractCenterOfMass",
@@ -292,7 +292,7 @@ class AddOffsets(Transform):
             y0i = self.atomref[inputs[structure.Z]]
             maxm = int(idx_m[-1]) + 1
 
-            y0 = scatter_add(y0i, idx_m, dim_size=maxm)
+            y0 = scatter_add(y0i, idx_m, dim_size=maxm, dim=0)
 
             if not self.is_extensive:
                 y0 /= inputs[structure.n_atoms]

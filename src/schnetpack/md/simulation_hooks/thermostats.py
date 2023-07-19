@@ -57,21 +57,22 @@ class ThermostatHook(SimulationHook):
             "time_constant", torch.tensor(time_constant * spk_units.fs)
         )
 
-        self.register_buffer("_initialized", torch.tensor(False))
+        #self.register_buffer("_initialized", torch.tensor(False))
+        self._initialized = False
 
     @property
     def initialized(self):
         """
         Auxiliary property for easy access to initialized flag used for restarts
         """
-        return self._initialized.item()
+        return self._initialized
 
     @initialized.setter
     def initialized(self, flag):
         """
         Make sure initialized is set to torch.tensor for storage in state_dict.
         """
-        self._initialized = torch.tensor(flag)
+        self._initialized = flag
 
     def on_simulation_start(self, simulator: Simulator):
         """
