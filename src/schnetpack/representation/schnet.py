@@ -143,7 +143,7 @@ class SchNet(nn.Module):
 
         # compute atom and pair features
         x = self.embedding(atomic_numbers)
-        d_ij = torch.norm(r_ij, dim=1)
+        d_ij = torch.linalg.norm(r_ij, dim=1)
         f_ij = self.radial_basis(d_ij)
         rcut_ij = self.cutoff_fn(d_ij)
 
