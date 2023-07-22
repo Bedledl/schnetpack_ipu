@@ -29,6 +29,7 @@ class SchNetInteraction(nn.Module):
             n_filters: number of filters used in continuous-filter convolution.
             activation: if None, no activation function is used.
         """
+        self.n_atom_basis = n_atom_basis
         super(SchNetInteraction, self).__init__()
         self.in2f = Dense(n_atom_basis, n_filters, bias=False, activation=None)
         self.f2out = nn.Sequential(
@@ -63,7 +64,8 @@ class SchNetInteraction(nn.Module):
         Wij = Wij * rcut_ij[:, None]
 
         # continuous-filter convolution
-        x_j = x[idx_j]
+        idx_j_expanded = idx_j.unsqueeze(1).expand(idx_j.shape[0], self.n_atom_basis)
+        x_j = torch.gather(x, 0, idx_j_expanded)
         x_ij = x_j * Wij
         x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
 
