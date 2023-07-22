@@ -32,6 +32,7 @@ Rij: Final[str] = "_Rij"  #: vectors pointing from center atoms to neighboring a
 Rij_lr: Final[
     str
 ] = "_Rij_lr"  #: vectors pointing from center atoms to neighboring atoms for long range
+Rij_norm: Final[str] = "_Rij_norm"  #: normed version of Rij
 n_atoms: Final[str] = "_n_atoms"  #: number of atoms
 n_molecules: Final[str] = "_n_molecules"  #: number of molecules
 offsets: Final[str] = "_offsets"  #: cell offset vectors
