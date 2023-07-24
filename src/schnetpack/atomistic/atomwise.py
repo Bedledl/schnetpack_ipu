@@ -78,8 +78,12 @@ class Atomwise(nn.Module):
         if self.aggregation_mode is not None:
             idx_m = inputs[properties.idx_m]
             maxm = inputs[properties.n_molecules]
-            y = snn.scatter_add(y, idx_m, dim_size=maxm)
-            y = torch.squeeze(y, -1)
+
+            if maxm == 1:
+                y = y.sum().unsqueeze(0)
+            else:
+                y = snn.scatter_add(y, idx_m, dim_size=maxm)
+                y = torch.squeeze(y, -1)
 
             if self.aggregation_mode == "avg":
                 y = y / inputs[properties.n_atoms]
