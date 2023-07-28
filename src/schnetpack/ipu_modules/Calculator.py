@@ -46,7 +46,6 @@ class IPUCalculator(MDCalculator):
     def calculate(self, system: System):
         inputs = self._get_system_molecules(system)
         self.results = self.model(inputs)
-        print(self.results)
         self._update_system(system)
 
     def _get_system_molecules(self, system: System):
