@@ -20,7 +20,8 @@ class SchNetInteraction(nn.Module):
         n_atom_basis: int,
         n_rbf: int,
         n_filters: int,
-        activation: Callable = shifted_softplus,
+        n_neighbors: int,
+        activation: Callable = shifted_softplus
     ):
         """
         Args:
@@ -29,6 +30,7 @@ class SchNetInteraction(nn.Module):
             n_filters: number of filters used in continuous-filter convolution.
             activation: if None, no activation function is used.
         """
+        self.n_rbf = n_rbf
         self.n_atom_basis = n_atom_basis
         super(SchNetInteraction, self).__init__()
         self.in2f = Dense(n_atom_basis, n_filters, bias=False, activation=None)
@@ -39,6 +41,7 @@ class SchNetInteraction(nn.Module):
         self.filter_network = nn.Sequential(
             Dense(n_rbf, n_filters, activation=activation), Dense(n_filters, n_filters)
         )
+        self.n_neighbors = n_neighbors
 
     def forward(
         self,
@@ -61,13 +64,18 @@ class SchNetInteraction(nn.Module):
         """
         x = self.in2f(x)
         Wij = self.filter_network(f_ij)
+        #print(Wij.shape) # 400 x 32
+        #print(rcut_ij[:, None].shape) 400 x 1
+        #.expand(x.shape[0] * self.n_neighbors, self.n)
         Wij = Wij * rcut_ij[:, None]
 
         # continuous-filter convolution
         idx_j_expanded = idx_j.unsqueeze(1).expand(idx_j.shape[0], self.n_atom_basis)
         x_j = torch.gather(x, 0, idx_j_expanded)
         x_ij = x_j * Wij
+
         x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+        #x = x_ij.reshape(x.shape[0], self.n_neighbors, -1).sum(1)
 
         x = self.f2out(x)
         return x
@@ -95,6 +103,7 @@ class SchNet(nn.Module):
         self,
         n_atom_basis: int,
         n_interactions: int,
+        n_neighbors: int,
         radial_basis: nn.Module,
         cutoff_fn: Callable,
         n_filters: int = None,
@@ -124,7 +133,7 @@ class SchNet(nn.Module):
         self.cutoff = cutoff_fn.cutoff
 
         # layers
-        self.embedding = nn.Embedding(max_z, self.n_atom_basis, padding_idx=0)
+        self.embedding = nn.Embedding(max_z, self.n_atom_basis)
 
         self.interactions = snn.replicate_module(
             lambda: SchNetInteraction(
@@ -132,6 +141,7 @@ class SchNet(nn.Module):
                 n_rbf=self.radial_basis.n_rbf,
                 n_filters=self.n_filters,
                 activation=activation,
+                n_neighbors=n_neighbors
             ),
             n_interactions,
             shared_interactions,

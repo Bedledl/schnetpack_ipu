@@ -15,3 +15,4 @@ from schnetpack import model
 from schnetpack.units import *
 from schnetpack.task import *
 from schnetpack import md
+from schnetpack import ipu_modules

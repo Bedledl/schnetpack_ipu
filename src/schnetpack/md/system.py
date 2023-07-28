@@ -160,7 +160,7 @@ class System(UninitializedMixin, nn.Module):
 
         # 3) Construct basic property arrays
         self.atom_types = torch.zeros(self.total_n_atoms, dtype=torch.long)
-        self.masses = torch.ones(1, self.total_n_atoms, 1)
+        self.masses = torch.ones(self.n_replicas, self.total_n_atoms, 1)
 
         # Relevant for dynamic properties: positions, momenta, forces
         self.positions = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
@@ -186,7 +186,7 @@ class System(UninitializedMixin, nn.Module):
             self.atom_types[idx_c : idx_c + n_atoms] = torch.from_numpy(
                 molecules[i].get_atomic_numbers()
             ).long()
-            self.masses[0, idx_c : idx_c + n_atoms, 0] = torch.from_numpy(
+            self.masses[:, idx_c : idx_c + n_atoms, 0] = torch.from_numpy(
                 molecules[i].get_masses() * mass2internal
             )
 
@@ -224,12 +224,23 @@ class System(UninitializedMixin, nn.Module):
         Returns:
             torch.Tensor: Aggregated tensor of the shape ( : x n_molecules x ...)
         """
+        print("sum atoms")
+        print(x)
         x_shape = x.shape
+
         x_tmp = torch.zeros(
             x_shape[0], self.n_molecules, *x_shape[2:], device=x.device, dtype=x.dtype
         )
 
-        return index_add(x_tmp, 1, self.index_m, x)
+        for i in range(x_shape[0]):
+            x_i_tmp = torch.zeros(
+                self.n_molecules, *x_shape[2:], device=x.device, dtype=x.dtype
+            )
+            index_add(x_i_tmp, 0, self.index_m, x[i])
+            x_tmp[i] = x_i_tmp
+
+        print(x_tmp)
+        return x_tmp
 
     def _mean_atoms(self, x: torch.Tensor):
         """
