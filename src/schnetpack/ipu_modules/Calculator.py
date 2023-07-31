@@ -1,6 +1,4 @@
 from typing import Union, List, Dict
-
-import poptorch
 import torch
 
 from schnetpack.md import System
