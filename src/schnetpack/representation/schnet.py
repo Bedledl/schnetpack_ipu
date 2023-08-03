@@ -74,8 +74,8 @@ class SchNetInteraction(nn.Module):
         x_j = torch.gather(x, 0, idx_j_expanded)
         x_ij = x_j * Wij
 
-        x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
-        #x = x_ij.reshape(x.shape[0], self.n_neighbors, -1).sum(1)
+        #x = scatter_add(x_ij, idx_i, dim_size=x.shape[0])
+        x = x_ij.reshape(x.shape[0], self.n_neighbors, -1).sum(1)
 
         x = self.f2out(x)
         return x
