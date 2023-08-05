@@ -6,6 +6,7 @@ Also this module does no support batching
 from typing import Dict
 
 import torch
+import poptorch
 from schnetpack import properties
 from schnetpack.transform import Transform
 
@@ -23,16 +24,56 @@ class KNNNeighborTransform(Transform):
     if we know that the batch size says constant throughout the use of this Module, we can use the
     n_atoms and n_molecules parameter to create a buffer with constant idx_i input.
     """
-    def __init__(self, k, n_replicas, n_atoms):
+    def __init__(self, k, n_replicas, n_atoms, cutoff_shell=2.):
         super(KNNNeighborTransform, self).__init__()
         self.k = int(k)
         self.n_atoms = n_atoms
         self.n_replicas = n_replicas
+        self.cutoff_shell = cutoff_shell
+        self.register_buffer("previous_positions", torch.full((n_replicas * n_atoms, 3), float('nan')))
+        self.register_buffer("previous_idx_j", torch.zeros(n_replicas * n_atoms * k, dtype=torch.int32))
 
     def forward(
             self,
             inputs: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
+        def calc_nl(positions: torch.Tensor, n_replicas, n_atoms, k) -> torch.Tensor:
+            idx_j_batches = []
+
+            offset = 0
+            for batch_pos in torch.chunk(positions, n_replicas):
+                x_expanded = batch_pos.expand(batch_pos.size(0), *batch_pos.shape)
+                y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
+
+                diff = x_expanded - y_expanded
+                norm = diff.pow(2).sum(-1)
+                # because we didn't filter out the loops yet, we have some 0 values here in the backward pass
+                norm = torch.sqrt(norm + 1e-8)
+
+                dist, col = torch.topk(norm,
+                                       k=k + 1,  # we need k + 1 because topk inclues loops
+                                       dim=-1,
+                                       largest=False)
+                # somehow when using this distance values the gradients after the filter network are zero
+                # but they are the same values as we get with the Distance transform
+
+                # this removes all the loops
+                col = col.reshape(-1, k + 1)[:, 1:].reshape(-1)
+                idx_j_batches.append(col + offset)
+
+                offset += n_atoms
+
+            idx_j = torch.cat(idx_j_batches)
+
+            return idx_j, positions
+
+        def get_prev_idx_j():
+            idx_j = self.previous_idx_j
+            positions = self.previous_positions
+            idx_j = poptorch.nop(idx_j)
+            positions = poptorch.nop(positions)
+            return idx_j, positions
+
         if inputs.get(properties.idx_i, None) is None:
             raise ValueError("Input dictionary nor self.idx_i do not contain the idx_i value. "
                              "This can lead to errors throughout the NN.")
@@ -44,31 +85,21 @@ class KNNNeighborTransform(Transform):
         # TODO batching! without a real batching implemnetation we mix atoms from different molecules
         positions = inputs[properties.position]
 
-        idx_j_batches = []
+        # check if calculating neighborlist is necessary:
+        first_run = torch.any(self.previous_positions.isnan().sum(-1, dtype=torch.bool))
 
-        offset = 0
-        for batch_pos in torch.chunk(positions, self.n_replicas):
-            x_expanded = batch_pos.expand(batch_pos.size(0), *batch_pos.shape)
-            y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
+        diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
+        # TODO minimal expample with abs()?
 
-            diff = x_expanded - y_expanded
-            norm = diff.pow(2).sum(-1)
-            # because we didn't filter out the loops yet, we have some 0 values here in the backward pass
-            norm = torch.sqrt(norm + 1e-8)
+        diff_greater_shell = torch.any(diff > 0.5 * self.cutoff_shell)
+        nl_calculation_required = first_run + diff_greater_shell
+        idx_j, positions = poptorch.cond(nl_calculation_required,
+                              calc_nl, [positions, self.n_replicas, self.n_atoms, self.k],
+                              get_prev_idx_j, [])#lambda x: x, [self.previous_idx_j])[0]
 
-            dist, col = torch.topk(norm,
-                                   k=self.k + 1, # we need k + 1 because topk inclues loops
-                                   dim=-1,
-                                   largest=False,
-                                   sorted=True)
-            # somehow when using this distance values the gradients after the filter network are zero
-            # but they are the same values as we get with the Distance transform
+        self.previous_idx_j.copy_(idx_j)
+        self.previous_positions.copy_(positions)
 
-            # this removes all the loops
-            col = col.reshape(-1, self.k + 1)[:, 1:].reshape(-1)
-            idx_j_batches.append(col + offset)
+        inputs[properties.idx_j] = idx_j
 
-            offset += self.n_atoms
-
-        inputs[properties.idx_j] = torch.cat(idx_j_batches)
         return inputs
