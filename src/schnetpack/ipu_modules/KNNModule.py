@@ -86,7 +86,9 @@ class KNNNeighborTransform(Transform):
         positions = inputs[properties.position]
 
         # check if calculating neighborlist is necessary:
-        first_run = self.previous_positions.isnan().sum(-1, dtype=torch.bool)
+        #first_run = self.previous_positions.isnan().sum(-1, dtype=torch.bool)
+        first_run = self.previous_positions == 0
+        first_run = first_run.sum(-1, dtype=torch.bool)
 
         print("KNNModule: found NAN values in stored previous positions.")
         diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
