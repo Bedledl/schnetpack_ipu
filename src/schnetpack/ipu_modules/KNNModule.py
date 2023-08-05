@@ -31,7 +31,7 @@ class KNNNeighborTransform(Transform):
         self.n_replicas = n_replicas
         self.cutoff_shell = cutoff_shell
         self.register_buffer("previous_positions",
-                             torch.full((n_replicas * n_atoms, 3), float('nan'),  dtype=torch.float32))
+                             torch.full((n_replicas * n_atoms, 3), float(0),  dtype=torch.float32))
         self.register_buffer("previous_idx_j", torch.zeros(n_replicas * n_atoms * k, dtype=torch.int32))
 
     def __calc_nl(self, positions: torch.Tensor) -> torch.Tensor:
