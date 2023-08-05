@@ -47,11 +47,6 @@ class MultiTempLangevinThermostat(ThermostatHook):
 
         self.c1 = c1[:, None, None]
         self.c2 = c2[:, None, None]
-        print("c1 c2:")
-        print(self.c1)
-        print(self.c2)
-        print("thermostat factors:")
-        print(self.thermostat_factors)
 
     def _apply_thermostat(self, simulator):
         # Apply the Langevin thermostat to each replica with its corresponding temperature
