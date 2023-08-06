@@ -30,50 +30,50 @@ class KNNNeighborTransform(Transform):
         self.n_atoms = n_atoms
         self.n_replicas = n_replicas
         self.cutoff_shell = cutoff_shell
-        self.register_buffer("previous_positions",
-                             torch.full((n_replicas * n_atoms, 3), float(0),  dtype=torch.float32))
+        self.register_buffer("previous_positions", torch.full((n_replicas * n_atoms, 3), float('nan')))
         self.register_buffer("previous_idx_j", torch.zeros(n_replicas * n_atoms * k, dtype=torch.int32))
-
-    def __calc_nl(self, positions: torch.Tensor) -> torch.Tensor:
-        idx_j_batches = []
-
-        offset = 0
-        for batch_pos in torch.chunk(positions, self.n_replicas):
-            x_expanded = batch_pos.expand(batch_pos.size(0), *batch_pos.shape)
-            y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
-
-            diff = x_expanded - y_expanded
-            norm = diff.pow(2).sum(-1)
-            # because we didn't filter out the loops yet, we have some 0 values here in the backward pass
-            norm = torch.sqrt(norm + 1e-8)
-
-            dist, col = torch.topk(norm,
-                                   k=self.k + 1, # we need k + 1 because topk inclues loops
-                                   dim=-1,
-                                   largest=False,
-                                   sorted=True)
-            # somehow when using this distance values the gradients after the filter network are zero
-            # but they are the same values as we get with the Distance transform
-
-            # this removes all the loops
-            col = col.reshape(-1, self.k + 1)[:, 1:].reshape(-1)
-            idx_j_batches.append(col + offset)
-
-            offset += self.n_atoms
-
-        idx_j = torch.cat(idx_j_batches)
-
-        self.previous_positions.copy_(positions)
-        self.previous_idx_j.copy_(idx_j)
-        return idx_j
-
-    def __get_prev_idx_j(self) -> torch.Tensor:
-        return self.previous_idx_j
 
     def forward(
             self,
             inputs: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
+        def calc_nl(positions: torch.Tensor, n_replicas, n_atoms, k) -> torch.Tensor:
+            idx_j_batches = []
+
+            offset = 0
+            for batch_pos in torch.chunk(positions, n_replicas):
+                x_expanded = batch_pos.expand(batch_pos.size(0), *batch_pos.shape)
+                y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
+
+                diff = x_expanded - y_expanded
+                norm = diff.pow(2).sum(-1)
+                # because we didn't filter out the loops yet, we have some 0 values here in the backward pass
+                norm = torch.sqrt(norm + 1e-8)
+
+                dist, col = torch.topk(norm,
+                                       k=k + 1,  # we need k + 1 because topk inclues loops
+                                       dim=-1,
+                                       largest=False)
+                # somehow when using this distance values the gradients after the filter network are zero
+                # but they are the same values as we get with the Distance transform
+
+                # this removes all the loops
+                col = col.reshape(-1, k + 1)[:, 1:].reshape(-1)
+                idx_j_batches.append(col + offset)
+
+                offset += n_atoms
+
+            idx_j = torch.cat(idx_j_batches)
+
+            return idx_j, positions
+
+        def get_prev_idx_j():
+            idx_j = self.previous_idx_j
+            positions = self.previous_positions
+            idx_j = poptorch.nop(idx_j)
+            positions = poptorch.nop(positions)
+            return idx_j, positions
+
         if inputs.get(properties.idx_i, None) is None:
             raise ValueError("Input dictionary nor self.idx_i do not contain the idx_i value. "
                              "This can lead to errors throughout the NN.")
@@ -86,17 +86,19 @@ class KNNNeighborTransform(Transform):
         positions = inputs[properties.position]
 
         # check if calculating neighborlist is necessary:
-        #first_run = self.previous_positions.isnan().sum(-1, dtype=torch.bool)
-        first_run = self.previous_positions == 0
-        first_run = first_run.sum(-1, dtype=torch.bool)
+        first_run = torch.any(self.previous_positions.isnan().sum(-1, dtype=torch.bool))
 
-        print("KNNModule: found NAN values in stored previous positions.")
         diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
         # TODO minimal expample with abs()?
 
-        diff_greater_shell = diff > 0.5 * self.cutoff_shell
-        nl_calculation_required = torch.any(torch.cat([first_run, diff_greater_shell]))
-        idx_j = poptorch.cond(nl_calculation_required, self.__calc_nl, [positions], self.__get_prev_idx_j, [])[0]
+        diff_greater_shell = torch.any(diff > 0.5 * self.cutoff_shell)
+        nl_calculation_required = first_run + diff_greater_shell
+        idx_j, positions = poptorch.cond(nl_calculation_required,
+                              calc_nl, [positions, self.n_replicas, self.n_atoms, self.k],
+                              get_prev_idx_j, [])#lambda x: x, [self.previous_idx_j])[0]
+
+        self.previous_idx_j.copy_(idx_j)
+        self.previous_positions.copy_(positions)
 
         inputs[properties.idx_j] = idx_j
 
