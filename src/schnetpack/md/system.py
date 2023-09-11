@@ -160,7 +160,7 @@ class System(UninitializedMixin, nn.Module):
 
         # 3) Construct basic property arrays
         self.atom_types = torch.zeros(self.total_n_atoms, dtype=torch.long)
-        self.masses = torch.ones(1, self.total_n_atoms, 1)
+        self.masses = torch.ones(self.n_replicas, self.total_n_atoms, 1)
 
         # Relevant for dynamic properties: positions, momenta, forces
         self.positions = torch.zeros(self.n_replicas, self.total_n_atoms, 3)
@@ -186,7 +186,7 @@ class System(UninitializedMixin, nn.Module):
             self.atom_types[idx_c : idx_c + n_atoms] = torch.from_numpy(
                 molecules[i].get_atomic_numbers()
             ).long()
-            self.masses[0, idx_c : idx_c + n_atoms, 0] = torch.from_numpy(
+            self.masses[:, idx_c : idx_c + n_atoms, 0] = torch.from_numpy(
                 molecules[i].get_masses() * mass2internal
             )
 
