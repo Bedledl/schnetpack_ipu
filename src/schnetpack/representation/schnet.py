@@ -20,7 +20,8 @@ class SchNetInteraction(nn.Module):
         n_atom_basis: int,
         n_rbf: int,
         n_filters: int,
-        activation: Callable = shifted_softplus,
+        n_neighbors: int,
+        activation: Callable = shifted_softplus
     ):
         """
         Args:
@@ -39,6 +40,7 @@ class SchNetInteraction(nn.Module):
         self.filter_network = nn.Sequential(
             Dense(n_rbf, n_filters, activation=activation), Dense(n_filters, n_filters)
         )
+        self.n_neighbors = n_neighbors
 
     def forward(
         self,
@@ -95,6 +97,7 @@ class SchNet(nn.Module):
         self,
         n_atom_basis: int,
         n_interactions: int,
+        n_neighbors: int,
         radial_basis: nn.Module,
         cutoff_fn: Callable,
         n_filters: int = None,
@@ -132,6 +135,7 @@ class SchNet(nn.Module):
                 n_rbf=self.radial_basis.n_rbf,
                 n_filters=self.n_filters,
                 activation=activation,
+                n_neighbors=n_neighbors
             ),
             n_interactions,
             shared_interactions,
