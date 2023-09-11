@@ -128,7 +128,7 @@ class SchNet(nn.Module):
         self.cutoff = cutoff_fn.cutoff
 
         # layers
-        self.embedding = nn.Embedding(max_z, self.n_atom_basis, padding_idx=0)
+        self.embedding = nn.Embedding(max_z, self.n_atom_basis)
 
         self.interactions = snn.replicate_module(
             lambda: SchNetInteraction(
