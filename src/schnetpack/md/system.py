@@ -229,7 +229,15 @@ class System(UninitializedMixin, nn.Module):
             x_shape[0], self.n_molecules, *x_shape[2:], device=x.device, dtype=x.dtype
         )
 
-        return index_add(x_tmp, 1, self.index_m, x)
+        for i in range(x_shape[0]):
+            x_i_tmp = torch.zeros(
+                self.n_molecules, *x_shape[2:], device=x.device, dtype=x.dtype
+            )
+            index_add(x_i_tmp, 0, self.index_m, x[i])
+            x_tmp[i] = x_i_tmp
+
+        print(x_tmp)
+        return x_tmp
 
     def _mean_atoms(self, x: torch.Tensor):
         """
