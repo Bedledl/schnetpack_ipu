@@ -24,12 +24,13 @@ class KNNNeighborTransform(Transform):
     if we know that the batch size says constant throughout the use of this Module, we can use the
     n_atoms and n_molecules parameter to create a buffer with constant idx_i input.
     """
-    def __init__(self, k, n_replicas, n_atoms, cutoff_shell=2.):
+    def __init__(self, k, n_replicas, n_atoms, cutoff_shell=2., always_update=True):
         super(KNNNeighborTransform, self).__init__()
         self.k = int(k)
         self.n_atoms = n_atoms
         self.n_replicas = n_replicas
         self.cutoff_shell = cutoff_shell
+        self.always_update = always_update
         self.register_buffer("previous_positions", torch.full((n_replicas * n_atoms, 3), float('nan')))
         self.register_buffer("previous_idx_j", torch.zeros(n_replicas * n_atoms * k, dtype=torch.int32))
 
@@ -86,13 +87,16 @@ class KNNNeighborTransform(Transform):
         positions = inputs[properties.position]
 
         # check if calculating neighborlist is necessary:
-        first_run = torch.any(self.previous_positions.isnan().sum(-1, dtype=torch.bool))
+        nl_calculation_required = self.always_update
+        if not nl_calculation_required:
+            first_run = torch.any(self.previous_positions.isnan().sum(-1, dtype=torch.bool))
 
-        diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
-        # TODO minimal expample with abs()?
+            diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
+            # TODO minimal expample with abs()?
 
-        diff_greater_shell = torch.any(diff > 0.5 * self.cutoff_shell)
-        nl_calculation_required = first_run + diff_greater_shell
+            diff_greater_shell = torch.any(diff > 0.5 * self.cutoff_shell)
+            nl_calculation_required = first_run + diff_greater_shell
+
         idx_j, positions = poptorch.cond(nl_calculation_required,
                               calc_nl, [positions, self.n_replicas, self.n_atoms, self.k],
                               get_prev_idx_j, [])#lambda x: x, [self.previous_idx_j])[0]
