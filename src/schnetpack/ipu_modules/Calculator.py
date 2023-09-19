@@ -16,14 +16,12 @@ class IPUCalculator(MDCalculator):
             force_key: str,
             energy_unit: Union[str, float],
             position_unit: Union[str, float],
+            n_neighbors: int,
             energy_key: str = None,
             stress_key: str = None,
             required_properties: List = [],
             property_conversion: Dict[str, Union[str, float]] = {},
             run_on_ipu=True,
-            n_atoms=None,
-            n_molecules=None,
-            n_neighbors=None
     ):
         super(IPUCalculator, self).__init__(
             required_properties,
@@ -35,13 +33,13 @@ class IPUCalculator(MDCalculator):
             property_conversion
         )
         if run_on_ipu:
+            model.eval()
+            model.to(torch.float32)
             self.model = poptorch.inferenceModel(model)
         else:
             self.model = model
 
-        self.n_atoms = n_atoms
-        self.n_molecules = n_molecules
-        self.k = n_neighbors
+        self.n_neighbors = n_neighbors
 
     def calculate(self, system: System):
         inputs = self._get_system_molecules(system)
@@ -51,9 +49,8 @@ class IPUCalculator(MDCalculator):
     def _get_system_molecules(self, system: System):
         inputs = super(IPUCalculator, self)._get_system_molecules(system)
         inputs[properties.n_molecules] = system.n_replicas
-        if self.n_atoms and self.n_molecules and self.k:
-            inputs[properties.idx_i] = torch.arange(self.n_atoms * self.n_molecules)\
-                .repeat_interleave(self.k)
-            inputs[properties.offsets] = torch.tensor([[0, 0, 0]])\
-                .repeat(self.n_atoms * self.n_molecules * self.k, 1)
+        inputs[properties.idx_i] = torch.arange(system.total_n_atoms)\
+            .repeat_interleave(self.n_neighbors)
+        inputs[properties.offsets] = torch.tensor([[0, 0, 0]])\
+            .repeat(system.total_n_atoms * self.n_neighbors, 1)
         return inputs
