@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from schnetpack import units as spk_units
 from schnetpack.md import Simulator
