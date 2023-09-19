@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Union, List, Dict
 
 import poptorch
@@ -54,3 +55,20 @@ class IPUCalculator(MDCalculator):
         inputs[properties.offsets] = torch.tensor([[0, 0, 0]])\
             .repeat(system.total_n_atoms * self.n_neighbors, 1)
         return inputs
+
+
+class BenchmarkCalculator(IPUCalculator):
+    """
+    This calculator is only for running benchmarks.
+    """
+    def compile_model(self, system):
+        """
+        This method compiles the model with the inputs given by the system.
+        """
+        inputs = self._get_system_molecules(system)
+        self.model.compile(inputs)
+
+    def get_model_call(self, system):
+        """This method returns a callable that runs the model and that can be used for a benchmark"""
+        inputs = self._get_system_molecules(system)
+        return partial(self.model.forward, inputs)
