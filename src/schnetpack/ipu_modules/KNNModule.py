@@ -87,8 +87,7 @@ class KNNNeighborTransform(Transform):
         positions = inputs[properties.position]
 
         # check if calculating neighborlist is necessary:
-        nl_calculation_required = self.always_update
-        if not nl_calculation_required:
+        if not self.always_update:
             first_run = torch.any(self.previous_positions.isnan().sum(-1, dtype=torch.bool))
 
             diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
@@ -96,6 +95,8 @@ class KNNNeighborTransform(Transform):
 
             diff_greater_shell = torch.any(diff > 0.5 * self.cutoff_shell)
             nl_calculation_required = first_run + diff_greater_shell
+        else:
+            nl_calculation_required = torch.tensor(True)
 
         idx_j, positions = poptorch.cond(nl_calculation_required,
                               calc_nl, [positions, self.n_replicas, self.n_atoms, self.k],
