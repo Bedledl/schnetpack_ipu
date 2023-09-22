@@ -47,9 +47,7 @@ class KNNNeighborTransform(Transform):
                 y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
 
                 diff = x_expanded - y_expanded
-                norm = diff.pow(2).sum(-1)
-                # because we didn't filter out the loops yet, we have some 0 values here in the backward pass
-                norm = torch.sqrt(norm + 1e-8)
+                norm = torch.linalg(diff)
 
                 dist, col = torch.topk(norm,
                                        k=k + 1,  # we need k + 1 because topk inclues loops
@@ -90,7 +88,7 @@ class KNNNeighborTransform(Transform):
         if not self.always_update:
             first_run = torch.any(self.previous_positions.isnan().sum(-1, dtype=torch.bool))
 
-            diff = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
+            diff = torch.linalg.norm(self.previous_positions - positions)
             # TODO minimal expample with abs()?
 
             diff_greater_shell = torch.any(diff > 0.5 * self.cutoff_shell)
