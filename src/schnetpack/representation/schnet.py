@@ -30,6 +30,7 @@ class SchNetInteraction(nn.Module):
             n_filters: number of filters used in continuous-filter convolution.
             activation: if None, no activation function is used.
         """
+        self.n_rbf = n_rbf
         super(SchNetInteraction, self).__init__()
         self.in2f = Dense(n_atom_basis, n_filters, bias=False, activation=None)
         self.f2out = nn.Sequential(
