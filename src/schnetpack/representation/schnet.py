@@ -142,13 +142,12 @@ class SchNet(nn.Module):
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         atomic_numbers = inputs[structure.Z]
-        r_ij = inputs[structure.Rij]
+        d_ij = inputs["R_ij_norm"]
         idx_i = inputs[structure.idx_i]
         idx_j = inputs[structure.idx_j]
 
         # compute atom and pair features
         x = self.embedding(atomic_numbers)
-        d_ij = torch.norm(r_ij, dim=1)
         f_ij = self.radial_basis(d_ij)
         rcut_ij = self.cutoff_fn(d_ij)
 

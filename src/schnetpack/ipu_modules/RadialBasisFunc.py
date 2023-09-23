@@ -26,8 +26,7 @@ class GaussianRBFIPU(torch.nn.Module):
             self.register_buffer("offsets", offset)
 
     def forward(self, dist: Tensor) -> Tensor:
-        # TODO is this calculation correct?
-        dist = dist.reshape(-1, 1) - self.offsets.reshape(1, -1)
+        dist = dist[..., None] - self.offsets
         dist = torch.pow(dist, 2)
         y = torch.exp(self.coeff * dist)
         return y

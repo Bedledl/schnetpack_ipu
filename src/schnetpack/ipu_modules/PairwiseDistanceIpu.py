@@ -17,11 +17,9 @@ class PairwiseDistancesIPU(torch.nn.Module):
         idx_j = inputs[properties.idx_j]
 
         # the backward pass of both python indexing and index_select is not supported in poptorch
-        idx_i_expanded = idx_i.unsqueeze(1).expand(idx_i.shape[0], 3)
-        pos_i = torch.gather(R, 0, idx_i_expanded)
-        idx_j_expanded = idx_j.unsqueeze(1).expand(idx_j.shape[0], 3)
-        pos_j = torch.gather(R, 0, idx_j_expanded)
+        pos_j = R[idx_j]
+        pos_i = R[idx_i]
 
         Rij = pos_j - pos_i + offsets
-        inputs[properties.Rij] = Rij
+        inputs["R_ij_norm"] = torch.linalg.norm(Rij, dim=1)
         return inputs
