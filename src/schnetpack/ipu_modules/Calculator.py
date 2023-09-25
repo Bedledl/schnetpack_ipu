@@ -68,10 +68,13 @@ class BenchmarkCalculator(IPUCalculator):
         inputs = self._get_system_molecules(system)
         self.model.compile(inputs)
 
+    def get_inputs(self, system):
+        return self._get_system_molecules(system)
+
     def get_model_call(self, system):
         """This method returns a callable that runs the model and that can be used for a benchmark"""
         inputs = self._get_system_molecules(system)
-        return partial(self.model.forward, inputs)
+        return partial(self.model, inputs)
 
     def calculate(self, system: System):
         inputs = self._get_system_molecules(system)
