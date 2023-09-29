@@ -80,10 +80,8 @@ class NeighborListMD:
             update_required = torch.ones(n_molecules, device=idx_m.device).bool()
         else:
             # Check for changes is positions
-            norm_diff_pos = torch.pow(self.previous_positions - positions, 2).sum(-1).sqrt()
             update_positions = (
-
-                norm_diff_pos
+                torch.norm(self.previous_positions - positions, dim=1)
                 > 0.5 * self.cutoff_shell
             ).float()
 
@@ -184,7 +182,7 @@ class NeighborListMD:
         idx_j = neighbor_idx[properties.idx_j]
 
         Rij = positions[idx_j] - positions[idx_i] + offsets
-        d_ij = Rij.pow(2).sum(-1).sqrt()
+        d_ij = torch.linalg.norm(Rij, dim=1)
         d_ij_filter = d_ij <= self.cutoff
 
         neighbor_idx[properties.idx_i] = neighbor_idx[properties.idx_i][d_ij_filter]
