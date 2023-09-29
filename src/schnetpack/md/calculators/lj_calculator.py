@@ -183,7 +183,7 @@ class LJModel(nn.Module):
 
         maxm = int(idx_m[-1]) + 1
         tmp = torch.zeros((maxm, 1), dtype=yi.dtype, device=yi.device)
-        y = snn.index_add(tmp, 0, idx_m, yi)
+        y = tmp.index_add(0, idx_m, yi)
         y = torch.squeeze(y, -1)
 
         y = self.well_depth * 0.5 * y

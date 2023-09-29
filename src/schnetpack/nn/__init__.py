@@ -12,4 +12,3 @@ from schnetpack.nn.so3 import *
 from schnetpack.nn.scatter import *
 from schnetpack.nn.radial import *
 from schnetpack.nn.utils import *
-from schnetpack.nn.index_add import *

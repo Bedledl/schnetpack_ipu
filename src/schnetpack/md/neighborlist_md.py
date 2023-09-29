@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-from schnetpack.nn import index_add
 from schnetpack.transform import NeighborListTransform, CollectAtomTriples
 from schnetpack.data.loader import _atoms_collate_fn
 from typing import List, Dict
@@ -90,8 +89,9 @@ class NeighborListMD:
 
             # Map to individual molecules
             update_required = torch.zeros(n_molecules, device=idx_m.device).float()
-            update_required = index_add(
-                update_required, 0, idx_m, update_positions).bool()
+            update_required = update_required.index_add(
+                0, idx_m, update_positions
+            ).bool()
 
             # Check for cell changes (is no cells are required, this will always be zero)
             update_cells = torch.any((self.previous_cells != cells).view(-1, 9), dim=1)
