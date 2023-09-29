@@ -81,7 +81,7 @@ class NeighborListMD:
         else:
             # Check for changes is positions
             update_positions = (
-                torch.norm(self.previous_positions - positions, dim=1)
+                torch.lingalg.norm(self.previous_positions - positions, dim=1)
                 > 0.5 * self.cutoff_shell
             ).float()
 

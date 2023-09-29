@@ -167,7 +167,7 @@ class LJModel(nn.Module):
         vec_ij = inputs[properties.Rij]
         positions = inputs[properties.R]
         idx_i = inputs[properties.idx_i]
-        r_ij = torch.norm(vec_ij, dim=1, keepdim=True)
+        r_ij = torch.linalg.norm(vec_ij, dim=1, keepdim=True)
         r_cut = self.cutoff_function(r_ij)
 
         # Compute lennard jones potential

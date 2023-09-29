@@ -206,7 +206,7 @@ class DipoleMoment(nn.Module):
         y = snn.scatter_add(y, idx_m, dim_size=maxm)
 
         if self.predict_magnitude:
-            y = torch.norm(y, dim=1, keepdim=False)
+            y = torch.linalg.norm(y, dim=1, keepdim=False)
 
         inputs[self.dipole_key] = y
         return inputs

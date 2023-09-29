@@ -40,7 +40,7 @@ class FilterShortRange(nn.Module):
         idx_j = inputs[properties.idx_j]
         Rij = inputs[properties.Rij]
 
-        rij = torch.norm(Rij, dim=-1)
+        rij = torch.linalg.norm(Rij, dim=-1)
         cidx = torch.nonzero(rij <= self.short_range_cutoff).squeeze(-1)
 
         inputs[properties.Rij_lr] = Rij

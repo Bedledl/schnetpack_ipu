@@ -58,7 +58,7 @@ class GatedEquivariantBlock(nn.Module):
         scalars, vectors = inputs
         vmix = self.mix_vectors(vectors)
         vectors_V, vectors_W = torch.split(vmix, self.n_vout, dim=-1)
-        vectors_Vn = torch.norm(vectors_V, dim=-2)
+        vectors_Vn = torch.linalg.norm(vectors_V, dim=-2)
 
         ctx = torch.cat([scalars, vectors_Vn], dim=-1)
         x = self.scalar_net(ctx)

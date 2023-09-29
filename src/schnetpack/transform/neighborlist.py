@@ -315,7 +315,7 @@ class SkinNeighborList(Transform):
         idx_j = inputs[properties.idx_j]
         offsets = inputs[properties.offsets]
 
-        rij = torch.norm(inputs[properties.Rij], dim=-1)
+        rij = torch.linalg.norm(inputs[properties.Rij], dim=-1)
         cidx = torch.nonzero(rij <= self.cutoff).squeeze(-1)
 
         inputs[properties.Rij] = Rij[cidx]
@@ -462,7 +462,7 @@ class TorchNeighborList(NeighborListTransform):
         Rij_all = positions[pi_all] - positions[pj_all] + shift_values
 
         # 5) Compute distances, and find all pairs within cutoff
-        distances = torch.norm(Rij_all, dim=1)
+        distances = torch.linalg.norm(Rij_all, dim=1)
         in_cutoff = torch.nonzero(distances < cutoff, as_tuple=False)
 
         # 6) Reduce tensors to relevant components
@@ -489,7 +489,7 @@ class TorchNeighborList(NeighborListTransform):
                 symmetric cells are not included.
         """
         reciprocal_cell = cell.inverse().t()
-        inverse_lengths = torch.norm(reciprocal_cell, dim=1)
+        inverse_lengths = torch.linalg.norm(reciprocal_cell, dim=1)
 
         num_repeats = torch.ceil(cutoff * inverse_lengths).long()
         num_repeats = torch.where(

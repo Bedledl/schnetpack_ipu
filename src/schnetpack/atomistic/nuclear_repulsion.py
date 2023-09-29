@@ -70,7 +70,7 @@ class ZBLRepulsionEnergy(nn.Module):
     def forward(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         z = inputs[properties.Z]
         r_ij = inputs[properties.Rij]
-        d_ij = torch.norm(r_ij, dim=1)
+        d_ij = torch.linalg.norm(r_ij, dim=1)
         idx_i = inputs[properties.idx_i]
         idx_j = inputs[properties.idx_j]
         idx_m = inputs[properties.idx_m]

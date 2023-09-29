@@ -128,7 +128,7 @@ class EnergyCoulomb(nn.Module):
             idx_i = inputs[properties.idx_i]
             idx_j = inputs[properties.idx_j]
 
-        d_ij = torch.norm(r_ij, dim=1)
+        d_ij = torch.linalg.norm(r_ij, dim=1)
 
         n_atoms = q.shape[0]
         n_molecules = int(idx_m[-1]) + 1
@@ -246,7 +246,7 @@ class EnergyEwald(torch.nn.Module):
             idx_i = inputs[properties.idx_i]
             idx_j = inputs[properties.idx_j]
 
-        d_ij = torch.norm(r_ij, dim=1)
+        d_ij = torch.linalg.norm(r_ij, dim=1)
 
         positions = inputs[properties.R]
         cell = inputs[properties.cell]

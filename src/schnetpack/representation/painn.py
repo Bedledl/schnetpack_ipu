@@ -212,7 +212,7 @@ class PaiNN(nn.Module):
         n_atoms = atomic_numbers.shape[0]
 
         # compute atom and pair features
-        d_ij = torch.norm(r_ij, dim=1, keepdim=True)
+        d_ij = torch.linalg.norm(r_ij, dim=1, keepdim=True)
         dir_ij = r_ij / d_ij
         phi_ij = self.radial_basis(d_ij)
         fcut = self.cutoff_fn(d_ij)
