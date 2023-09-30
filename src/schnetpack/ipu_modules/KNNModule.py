@@ -43,12 +43,12 @@ class KNNNeighborTransform(Transform):
 
             offset = 0
             for batch_pos in torch.chunk(positions, n_replicas):
-                x_expanded = batch_pos.expand(batch_pos.size(0), *batch_pos.shape)
-                y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
+                i_expanded = batch_pos.expand(batch_pos.size(0), *batch_pos.shape)
+                j_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
 
-                diff = x_expanded - y_expanded
+                diff = i_expanded - j_expanded
 
-                norm = torch.linalg.norm(diff + 1e-8, dim=1)
+                norm = torch.linalg.norm(diff + 1e-8, dim=-1)
 
                 dist, col = torch.topk(norm,
                                        k=k + 1,  # we need k + 1 because topk inclues loops
