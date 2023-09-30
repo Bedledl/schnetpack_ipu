@@ -47,9 +47,8 @@ class KNNNeighborTransform(Transform):
                 y_expanded = batch_pos.reshape(batch_pos.size(0), 1, batch_pos.size(1))
 
                 diff = x_expanded - y_expanded
-                norm = diff.pow(2).sum(-1)
-                # because we didn't filter out the loops yet, we have some 0 values here in the backward pass
-                norm = torch.sqrt(norm + 1e-8)
+
+                norm = torch.linalg.norm(diff + 1e-8, dim=1)
 
                 dist, col = torch.topk(norm,
                                        k=k + 1,  # we need k + 1 because topk inclues loops
