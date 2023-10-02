@@ -5,3 +5,4 @@ from .ShiftedSofplusIPU import *
 from .RadialBasisFunc import *
 from .Calculator import *
 from .MultiTempThermostat import *
+from .Cutoff import *
