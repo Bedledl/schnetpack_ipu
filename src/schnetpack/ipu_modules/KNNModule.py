@@ -53,7 +53,8 @@ class KNNNeighborTransform(Transform):
                 dist, col = torch.topk(norm,
                                        k=k + 1,  # we need k + 1 because topk inclues loops
                                        dim=-1,
-                                       largest=False)
+                                       largest=False,
+                                       sorted=True) # we need sorted values to remove the self-loop efficiently
                 # somehow when using this distance values the gradients after the filter network are zero
                 # but they are the same values as we get with the Distance transform
 
