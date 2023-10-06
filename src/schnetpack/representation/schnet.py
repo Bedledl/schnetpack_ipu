@@ -63,12 +63,18 @@ class SchNetInteraction(nn.Module):
             atom features after interaction
         """
         x = self.in2f(x)
-        Wij = self.filter_network(f_ij)
+
+        #Wij = self.filter_network(f_ij)
+        Wij = torch.utils.checkpoint.checkpoint(self.filter_network, f_ij,
+                                                 use_reentrant=False)
         Wij = Wij * rcut_ij[:, None]
 
         # continuous-filter convolution
         idx_j_expanded = idx_j.unsqueeze(1).expand(idx_j.shape[0], self.n_atom_basis)
-        x_j = torch.gather(x, 0, idx_j_expanded)
+
+        #x_j = torch.gather(x, 0, idx_j_expanded)
+        x_j = torch.utils.checkpoint.checkpoint(torch.gather, x, 0, idx_j_expanded, use_reentrant=False)
+
         x_ij = x_j * Wij
         x = x_ij.reshape(x.shape[0], self.n_neighbors, -1).sum(1)
 
