@@ -65,7 +65,7 @@ class SchNetInteraction(nn.Module):
         x = self.in2f(x)
 
         #Wij = self.filter_network(f_ij)
-        Wij = torch.utils.checkpoint.checkpoint(self.filter_network, f_ij,
+        Wij = torch.utils.checkpoint.checkpoint_sequential(self.filter_network, 2, f_ij,
                                                  use_reentrant=False)
         Wij = Wij * rcut_ij[:, None]
 
@@ -78,7 +78,8 @@ class SchNetInteraction(nn.Module):
         x_ij = x_j * Wij
         x = x_ij.reshape(x.shape[0], self.n_neighbors, -1).sum(1)
 
-        x = self.f2out(x)
+        #x = self.f2out(x)
+        x = torch.utils.checkpoint.checkpoint_sequential(self.f2out, 2, x, use_reentrant=False)
         return x
 
 
