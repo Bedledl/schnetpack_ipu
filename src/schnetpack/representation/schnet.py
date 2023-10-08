@@ -158,7 +158,7 @@ class SchNet(nn.Module):
         # compute atom and pair features
         x = self.embedding(atomic_numbers)
         d_ij = torch.linalg.norm(r_ij, dim=1)
-        f_ij = self.radial_basis(d_ij)
+        f_ij = torch.utils.checkpoint.checkpoint(self.radial_basis, d_ij, use_reentrant=False)
         rcut_ij = self.cutoff_fn(d_ij)
 
         # compute interaction block to update atomic embeddings
