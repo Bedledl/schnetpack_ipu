@@ -9,5 +9,5 @@ class CosineCutoff(torch.nn.Module):
 
     def forward(self, input: torch.Tensor):
         input_cut = 0.5 * (torch.cos(input * math.pi / self.cutoff) + 1.0)
-        input_cut = input_cut *  (input < self.cutoff).to(torch.float32)
+        input_cut = input_cut *  (input < self.cutoff).to(input.dtype)
         return input_cut
