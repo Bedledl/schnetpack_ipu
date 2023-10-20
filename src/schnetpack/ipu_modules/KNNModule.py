@@ -31,8 +31,6 @@ class KNNNeighborTransform(Transform):
         self.n_replicas = n_replicas
         self.cutoff_shell = cutoff_shell
         self.always_update = always_update
-        self.register_buffer("previous_positions", torch.full((n_replicas * n_atoms, 3), float('nan')))
-        self.register_buffer("previous_idx_j", torch.zeros(n_replicas * n_atoms * k, dtype=torch.int32))
 
     def forward(
             self,
@@ -69,8 +67,8 @@ class KNNNeighborTransform(Transform):
             return idx_j, positions
 
         def get_prev_idx_j():
-            idx_j = self.previous_idx_j
-            positions = self.previous_positions
+            idx_j = inputs["prev_idx_j"]
+            positions = inputs["prev_positions"]
             idx_j = poptorch.nop(idx_j)
             positions = poptorch.nop(positions)
             return idx_j, positions
@@ -98,12 +96,10 @@ class KNNNeighborTransform(Transform):
         else:
             nl_calculation_required = torch.tensor(True)
 
-        idx_j, positions = poptorch.cond(nl_calculation_required,
-                              calc_nl, [positions, self.n_replicas, self.n_atoms, self.k],
-                              get_prev_idx_j, [])#lambda x: x, [self.previous_idx_j])[0]
+        idx_j, positions = calc_nl(positions, self.n_replicas, self.n_atoms, self.k)
 
-        self.previous_idx_j.copy_(idx_j)
-        self.previous_positions.copy_(positions)
+        #inputs["prev_idx_j"] = idx_j
+        #inputs["prev_positions"] = positions
 
         inputs[properties.idx_j] = idx_j
 
